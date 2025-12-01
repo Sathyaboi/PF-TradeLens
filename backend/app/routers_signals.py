@@ -1,31 +1,52 @@
-from fastapi import APIRouter
-from .schemas import SignalRequest, SignalOut
-from .indicators import simple_signal
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import List
+
+from .indicators import advanced_signal
+
+
 
 router = APIRouter(
     prefix="/signals",
     tags=["Signals"]
 )
 
-# --------------------------
-# Generate SMA-based Signals
-# --------------------------
 
-@router.post("/generate", response_model=list[SignalOut])
-def generate_signals(payload: SignalRequest):
+# ----------------------------
+# Request Model
+# ----------------------------
+class SignalRequest(BaseModel):
+    symbols: List[str]
+
+
+# ----------------------------
+# Response Model
+# ----------------------------
+class SignalResponse(BaseModel):
+    symbol: str
+    signal: str
+
+
+# ----------------------------
+# /signals/generate
+# ----------------------------
+@router.post("/generate", response_model=List[SignalResponse])
+def generate_signals(request: SignalRequest):
     """
-    Generates BUY/SELL/HOLD signals for a list of stock symbols
-    using the simple SMA crossover strategy.
+    Generates BUY / SELL / HOLD signals for a list of stock tickers
+    using the advanced signal engine (SMA + RSI + MACD).
     """
 
     results = []
 
-    for symbol in payload.symbols:
-        try:
-            action = simple_signal(symbol)
-        except Exception:
-            action = "ERROR"
+    if not request.symbols or len(request.symbols) == 0:
+        raise HTTPException(status_code=400, detail="No symbols provided.")
 
-        results.append(SignalOut(symbol=symbol, action=action))
+    for symbol in request.symbols:
+        try:
+            signal = advanced_signal(symbol.upper())
+            results.append(SignalResponse(symbol=symbol.upper(), signal=signal))
+        except Exception:
+            results.append(SignalResponse(symbol=symbol.upper(), signal="ERROR"))
 
     return results
